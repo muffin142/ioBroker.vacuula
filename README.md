@@ -21,7 +21,7 @@ Connect to your Vacuula Server
 -->
 
 ### **WORK IN PROGRESS**
-* (muffin142) add remaining cleaning time
+* (muffin142) enabled automated releases
 
 ### 0.0.1 (2026-11-05)
 * (muffin142) initial release
