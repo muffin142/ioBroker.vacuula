@@ -1,0 +1,11 @@
+{
+	"vacuula adapter settings": "Paramètres de l'adaptateur vacuula",
+	"Vacuula server": "Serveur Vacuula",
+	"Protocol": "Protocole",
+	"Protocol used to connect to the Vacuula server": "Protocole utilisé pour se connecter au serveur Vacuula",
+	"Server address": "Adresse du serveur",
+	"Hostname, IPv4 or IPv6 address of the Vacuula server, optionally with port (e.g. 192.168.1.10:8080 or [fd00::10]:8080)": "Nom d'hôte, adresse IPv4 ou IPv6 du serveur Vacuula, éventuellement avec le port (ex. 192.168.1.10:8080 ou [fd00::10]:8080)",
+	"Please enter a hostname, IPv4 or IPv6 address without protocol, optionally with port (e.g. 192.168.1.10:8080 or [fd00::10]:8080)": "Veuillez saisir un nom d'hôte, une adresse IPv4 ou IPv6 sans protocole, éventuellement avec le port (ex. 192.168.1.10:8080 ou [fd00::10]:8080)",
+	"Polling interval": "Intervalle d'interrogation",
+	"Interval in seconds for querying robots and their state": "Intervalle en secondes pour interroger les robots et leur état"
+}

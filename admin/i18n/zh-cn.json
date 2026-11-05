@@ -1,0 +1,11 @@
+{
+	"vacuula adapter settings": "vacuula 适配器设置",
+	"Vacuula server": "Vacuula 服务器",
+	"Protocol": "协议",
+	"Protocol used to connect to the Vacuula server": "连接 Vacuula 服务器所使用的协议",
+	"Server address": "服务器地址",
+	"Hostname, IPv4 or IPv6 address of the Vacuula server, optionally with port (e.g. 192.168.1.10:8080 or [fd00::10]:8080)": "Vacuula 服务器的主机名、IPv4 或 IPv6 地址，可附带端口（例如 192.168.1.10:8080 或 [fd00::10]:8080）",
+	"Please enter a hostname, IPv4 or IPv6 address without protocol, optionally with port (e.g. 192.168.1.10:8080 or [fd00::10]:8080)": "请输入不带协议的主机名、IPv4 或 IPv6 地址，可附带端口（例如 192.168.1.10:8080 或 [fd00::10]:8080）",
+	"Polling interval": "轮询间隔",
+	"Interval in seconds for querying robots and their state": "查询机器人及其状态的间隔（秒）"
+}

@@ -1,0 +1,69 @@
+{
+	"i18n": true,
+	"type": "panel",
+	"items": {
+		"_serverHeader": {
+			"type": "header",
+			"text": "Vacuula server",
+			"size": 2,
+			"newLine": true,
+			"xs": 12,
+			"sm": 12,
+			"md": 12,
+			"lg": 12,
+			"xl": 12
+		},
+		"protocol": {
+			"type": "select",
+			"label": "Protocol",
+			"help": "Protocol used to connect to the Vacuula server",
+			"options": [
+				{
+					"label": "HTTP",
+					"value": "http"
+				},
+				{
+					"label": "HTTPS",
+					"value": "https"
+				}
+			],
+			"default": "http",
+			"newLine": true,
+			"xs": 12,
+			"sm": 12,
+			"md": 3,
+			"lg": 2,
+			"xl": 2
+		},
+		"host": {
+			"type": "text",
+			"label": "Server address",
+			"help": "Hostname, IPv4 or IPv6 address of the Vacuula server, optionally with port (e.g. 192.168.1.10:8080 or [fd00::10]:8080)",
+			"placeholder": "192.168.1.10:8080",
+			"trim": true,
+			"validator": "const h = String(data.host || '').trim(); if (!h || /[\\s\\/?#@]/.test(h)) { return false; } const v = /^[0-9a-fA-F:.]+$/.test(h) && (h.match(/:/g) || []).length > 1 ? '[' + h + ']' : h; try { return !!new URL('http://' + v).hostname; } catch (e) { return false; }",
+			"validatorErrorText": "Please enter a hostname, IPv4 or IPv6 address without protocol, optionally with port (e.g. 192.168.1.10:8080 or [fd00::10]:8080)",
+			"validatorNoSaveOnError": true,
+			"xs": 12,
+			"sm": 12,
+			"md": 9,
+			"lg": 6,
+			"xl": 6
+		},
+		"pollInterval": {
+			"type": "number",
+			"label": "Polling interval",
+			"help": "Interval in seconds for querying robots and their state",
+			"min": 5,
+			"max": 3600,
+			"default": 30,
+			"unit": "s",
+			"newLine": true,
+			"xs": 12,
+			"sm": 12,
+			"md": 3,
+			"lg": 2,
+			"xl": 2
+		}
+	}
+}
