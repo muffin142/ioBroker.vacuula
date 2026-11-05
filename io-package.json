@@ -1,113 +1,126 @@
 {
-	"common": {
-		"name": "vacuula",
-		"version": "0.0.1",
-		"news": {
-			"0.0.1": {
-				"en": "initial release",
-				"de": "Erstveröffentlichung",
-				"ru": "Начальная версия",
-				"pt": "lançamento inicial",
-				"nl": "Eerste uitgave",
-				"fr": "Première version",
-				"it": "Versione iniziale",
-				"es": "Versión inicial",
-				"pl": "Pierwsze wydanie",
-				"uk": "Початкова версія",
-				"zh-cn": "首次出版"
-			}
-		},
-		"titleLang": {
-			"en": "Vacuula",
-			"de": "Vakuula",
-			"ru": "Вакуула",
-			"pt": "Vácuula",
-			"nl": "Vacuüm",
-			"fr": "Vacuule",
-			"it": "Vacuolo",
-			"es": "vacuula",
-			"pl": "Vacuula",
-			"uk": "Вакуула",
-			"zh-cn": "真空"
-		},
-		"desc": {
-			"en": "Connect to your Vacuula Server",
-			"de": "Stellen Sie eine Verbindung zu Ihrem Vacuula-Server her",
-			"ru": "Подключитесь к вашему серверу Vacuula",
-			"pt": "Conecte-se ao seu servidor Vacuula",
-			"nl": "Maak verbinding met uw Vacuula Server",
-			"fr": "Connectez-vous à votre serveur Vacuula",
-			"it": "Connettiti al tuo server Vacuula",
-			"es": "Conéctese a su servidor Vacuula",
-			"pl": "Połącz się ze swoim serwerem Vacuula",
-			"uk": "Підключіться до свого сервера Vacuula",
-			"zh-cn": "连接到您的 Vacuula 服务器"
-		},
-		"authors": [
-			"muffin142 <muffin142@outlook.com>"
-		],
-		"keywords": [
-			"Vacuula",
-			"Neato",
-			"Cleaning Robot"
-		],
-		"licenseInformation": {
-			"type": "free",
-			"license": "MIT"
-		},
-		"platform": "Javascript/Node.js",
-		"icon": "vacuula.png",
-		"enabled": true,
-		"extIcon": "https://raw.githubusercontent.com/muffin142/ioBroker.vacuula/main/admin/vacuula.png",
-		"readme": "https://github.com/muffin142/ioBroker.vacuula/blob/main/README.md",
-		"loglevel": "info",
-		"tier": 3,
-		"mode": "daemon",
-		"type": "household",
-		"compact": true,
-		"connectionType": "local",
-		"dataSource": "poll",
-		"adminUI": {
-			"config": "json"
-		},
-		"dependencies": [
-			{
-				"js-controller": ">=6.0.11"
-			}
-		],
-		"globalDependencies": [
-			{
-				"admin": ">=7.0.23"
-			}
-		]
-	},
-	"native": {
-		"protocol": "http",
-		"host": "",
-		"pollInterval": 30
-	},
-	"objects": [],
-	"instanceObjects": [
-		{
-			"_id": "info",
-			"type": "channel",
-			"common": {
-				"name": "Information"
-			},
-			"native": {}
-		},
-		{
-			"_id": "info.connection",
-			"type": "state",
-			"common": {
-				"role": "indicator.connected",
-				"name": "Device or service connected",
-				"type": "boolean",
-				"read": true,
-				"write": false,
-				"def": false
-			},
-			"native": {}
-		}
-	]
+  "common": {
+    "name": "vacuula",
+    "version": "0.0.2",
+    "news": {
+      "0.0.2": {
+        "en": "enabled automated releases",
+        "de": "aktivierte Automatismen",
+        "ru": "включенные автоматические релизы",
+        "pt": "ativou versões automáticas",
+        "nl": "automatische releases ingeschakeld",
+        "fr": "sorties automatiques activées",
+        "it": "rilasci automatici",
+        "es": "permitió lanzamientos automáticos",
+        "pl": "włączone automatyczne wydania",
+        "uk": "увімкнені автоматичні випуски",
+        "zh-cn": "启用自动发布"
+      },
+      "0.0.1": {
+        "en": "initial release",
+        "de": "Erstveröffentlichung",
+        "ru": "Начальная версия",
+        "pt": "lançamento inicial",
+        "nl": "Eerste uitgave",
+        "fr": "Première version",
+        "it": "Versione iniziale",
+        "es": "Versión inicial",
+        "pl": "Pierwsze wydanie",
+        "uk": "Початкова версія",
+        "zh-cn": "首次出版"
+      }
+    },
+    "titleLang": {
+      "en": "Vacuula",
+      "de": "Vakuula",
+      "ru": "Вакуула",
+      "pt": "Vácuula",
+      "nl": "Vacuüm",
+      "fr": "Vacuule",
+      "it": "Vacuolo",
+      "es": "vacuula",
+      "pl": "Vacuula",
+      "uk": "Вакуула",
+      "zh-cn": "真空"
+    },
+    "desc": {
+      "en": "Connect to your Vacuula Server",
+      "de": "Stellen Sie eine Verbindung zu Ihrem Vacuula-Server her",
+      "ru": "Подключитесь к вашему серверу Vacuula",
+      "pt": "Conecte-se ao seu servidor Vacuula",
+      "nl": "Maak verbinding met uw Vacuula Server",
+      "fr": "Connectez-vous à votre serveur Vacuula",
+      "it": "Connettiti al tuo server Vacuula",
+      "es": "Conéctese a su servidor Vacuula",
+      "pl": "Połącz się ze swoim serwerem Vacuula",
+      "uk": "Підключіться до свого сервера Vacuula",
+      "zh-cn": "连接到您的 Vacuula 服务器"
+    },
+    "authors": [
+      "muffin142 <muffin142@outlook.com>"
+    ],
+    "keywords": [
+      "Vacuula",
+      "Neato",
+      "Cleaning Robot"
+    ],
+    "licenseInformation": {
+      "type": "free",
+      "license": "MIT"
+    },
+    "platform": "Javascript/Node.js",
+    "icon": "vacuula.png",
+    "enabled": true,
+    "extIcon": "https://raw.githubusercontent.com/muffin142/ioBroker.vacuula/main/admin/vacuula.png",
+    "readme": "https://github.com/muffin142/ioBroker.vacuula/blob/main/README.md",
+    "loglevel": "info",
+    "tier": 3,
+    "mode": "daemon",
+    "type": "household",
+    "compact": true,
+    "connectionType": "local",
+    "dataSource": "poll",
+    "adminUI": {
+      "config": "json"
+    },
+    "dependencies": [
+      {
+        "js-controller": ">=6.0.11"
+      }
+    ],
+    "globalDependencies": [
+      {
+        "admin": ">=7.0.23"
+      }
+    ]
+  },
+  "native": {
+    "protocol": "http",
+    "host": "",
+    "pollInterval": 30
+  },
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "info",
+      "type": "channel",
+      "common": {
+        "name": "Information"
+      },
+      "native": {}
+    },
+    {
+      "_id": "info.connection",
+      "type": "state",
+      "common": {
+        "role": "indicator.connected",
+        "name": "Device or service connected",
+        "type": "boolean",
+        "read": true,
+        "write": false,
+        "def": false
+      },
+      "native": {}
+    }
+  ]
 }
