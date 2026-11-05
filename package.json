@@ -12,7 +12,8 @@
   "keywords": [
     "Vacuula",
     "Neato",
-    "Cleaning Robot"
+    "Cleaning Robot",
+    "ioBroker"
   ],
   "repository": {
     "type": "git",

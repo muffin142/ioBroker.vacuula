@@ -11,6 +11,13 @@ updates:
     assignees:
       - muffin142
     versioning-strategy: increase
+    cooldown:
+      # only propose versions that have been published for at least 7 days (supply chain protection)
+      default-days: 7
+    ignore:
+      # @types/node major must match the minimum supported Node.js version (engines.node)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
