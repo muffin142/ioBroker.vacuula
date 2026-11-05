@@ -114,7 +114,7 @@
       "type": "state",
       "common": {
         "role": "indicator.connected",
-        "name": "Device or service connected",
+        "name": "Vacuula Server connected",
         "type": "boolean",
         "read": true,
         "write": false,

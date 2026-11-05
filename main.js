@@ -44,11 +44,11 @@ const ROBOT_STATES = {
 	},
 	'status.error': {
 		path: ['error'],
-		common: { name: 'Error message', type: 'string', role: 'text', read: true, write: false },
+		common: { name: 'Error message', type: 'string', role: 'indicator', read: true, write: false },
 	},
 	'status.alert': {
 		path: ['alert'],
-		common: { name: 'Alert message', type: 'string', role: 'text', read: true, write: false },
+		common: { name: 'Alert message', type: 'string', role: 'indicator', read: true, write: false },
 	},
 	'status.state': {
 		path: ['state'],
@@ -109,7 +109,16 @@ const ROBOT_STATES = {
 	},
 	'cleaning.modifier': {
 		path: ['cleaning', 'modifier'],
-		common: { name: 'Modifier', type: 'number', role: 'value', read: true, write: false },
+		common: {
+			name: 'Modifier',
+			type: 'number',
+			role: 'value',
+			states: { 1: 'Normal', 2: 'Intensive' },
+			min: 1,
+			max: 2,
+			read: true,
+			write: true,
+		},
 	},
 	'cleaning.navigationMode': {
 		path: ['cleaning', 'navigationMode'],
@@ -259,7 +268,8 @@ class Vacuula extends utils.Adapter {
 			}
 		} catch (error) {
 			this.reportError('server', `Cannot fetch robot list from ${this.baseUrl}/api/robots: ${error.message}`);
-			await this.setState('info.connection', false, true);
+			// also covers HTTP errors / invalid answers of the robot list, the server is not usable then
+			await this.setConnected(false);
 			for (const objId of this.robots.keys()) {
 				await this.setState(`${objId}.connected`, false, true);
 			}
@@ -267,7 +277,6 @@ class Vacuula extends utils.Adapter {
 		}
 
 		this.clearError('server', `Connection to Vacuula server ${this.baseUrl} established`);
-		await this.setState('info.connection', true, true);
 
 		const seen = new Set();
 		for (const [robotId, robot] of Object.entries(robotList)) {
@@ -546,6 +555,8 @@ class Vacuula extends utils.Adapter {
 				signal: AbortSignal.timeout(REQUEST_TIMEOUT),
 			});
 		} catch (error) {
+			// server not reachable (network error, refused, timeout, TLS error, ...)
+			await this.setConnected(false);
 			const cause = error.cause && error.cause.message ? ` (${error.cause.message})` : '';
 			if (error.name === 'TimeoutError') {
 				throw new Error(`timeout after ${REQUEST_TIMEOUT / 1000} s`);
@@ -555,13 +566,30 @@ class Vacuula extends utils.Adapter {
 
 		const text = await response.text();
 		if (!response.ok) {
+			// server answered, but the request failed (e.g. robot offline) -> connection state unchanged
 			throw new Error(`HTTP ${response.status} ${response.statusText}${text ? `: ${text}` : ''}`);
 		}
+		let data;
 		try {
-			return JSON.parse(text);
+			data = JSON.parse(text);
 		} catch {
 			throw new Error(`invalid JSON response: ${text.substring(0, 200)}`);
 		}
+		await this.setConnected(true);
+		return data;
+	}
+
+	/**
+	 * Updates vacuula.0.info.connection, which indicates whether the adapter is connected to the Vacuula server.
+	 * Only writes the state if the value actually changes.
+	 *
+	 * @param {boolean} connected - true if the server is reachable and answers correctly
+	 */
+	async setConnected(connected) {
+		if (this.unloading) {
+			return;
+		}
+		await this.setStateChangedAsync('info.connection', connected, true);
 	}
 
 	/**
