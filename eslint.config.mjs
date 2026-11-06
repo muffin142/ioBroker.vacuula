@@ -32,4 +32,11 @@ export default [
 			// 'jsdoc/require-returns-check': 'off',
 		},
 	},
+	{
+		// JS files are type-checked via JSDoc (checkJs in tsconfig.json), so @type tags are required there
+		files: ['**/*.js'],
+		rules: {
+			'jsdoc/check-tag-names': ['warn', { typed: false }],
+		},
+	},
 ];

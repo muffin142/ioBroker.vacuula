@@ -3,11 +3,11 @@ updates:
   - package-ecosystem: npm
     directory: "/"
     schedule:
-      interval: monthly
-      day: "thursday"
-      time: "00:05"
+      # monthly on the 13th at a random time (load distribution)
+      interval: cron
+      cronjob: "37 3 13 * *"
       timezone: Europe/Berlin
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 15
     assignees:
       - muffin142
     versioning-strategy: increase
@@ -25,10 +25,10 @@ updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: monthly
-      day: "thursday"
-      time: "00:05"
+      # monthly on the 13th at a random time (load distribution)
+      interval: cron
+      cronjob: "52 4 13 * *"
       timezone: Europe/Berlin
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 15
     assignees:
       - muffin142

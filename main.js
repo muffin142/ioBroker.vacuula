@@ -26,6 +26,7 @@ const ROBOT_STATES = {
 		path: ['meta', 'firmware'],
 		common: { name: 'Firmware', type: 'string', role: 'info.firmware', read: true, write: false },
 	},
+
 	'status.isCharging': {
 		path: ['details', 'isCharging'],
 		common: { name: 'Is charging', type: 'boolean', role: 'indicator', read: true, write: false },
@@ -88,7 +89,7 @@ const ROBOT_STATES = {
 	'cleaning.category': {
 		path: ['cleaning', 'category'],
 		common: {
-			name: 'Mode',
+			name: 'Cleaning mode',
 			type: 'number',
 			role: 'level',
 			states: { 2: 'House', 3: 'Spot', 4: 'Map' },
@@ -99,7 +100,7 @@ const ROBOT_STATES = {
 	'cleaning.mode': {
 		path: ['cleaning', 'mode'],
 		common: {
-			name: 'Cleaning',
+			name: 'Power mode',
 			type: 'number',
 			role: 'level',
 			states: { 1: 'Eco', 2: 'Normal' },
@@ -469,6 +470,10 @@ class Vacuula extends utils.Adapter {
 			this.log.info(`Sending "${def.cmd}" to robot ${robotId}: ${JSON.stringify(payload)}`);
 			await this.sendCommand(robotId, payload);
 			this.log.debug(`Command "${def.cmd}" for robot ${robotId} accepted`);
+
+			if (command === 'start') {
+				await this.acknowledgeCleaningSettings(objId);
+			}
 		} catch (error) {
 			this.log.error(`Command "${def.cmd}" for robot ${robotId} failed: ${error.message}`);
 		} finally {
@@ -477,6 +482,25 @@ class Vacuula extends utils.Adapter {
 
 		// refresh state so availableCommands / cleaning values reflect the new situation
 		await this.updateRobotState(objId, robotId);
+	}
+
+	/**
+	 * Confirms user-set cleaning settings (ack=false) after a successful start, so that polling
+	 * shows the values reported by the robot again instead of skipping these states forever.
+	 *
+	 * @param {string} objId - Object id of the robot device
+	 */
+	async acknowledgeCleaningSettings(objId) {
+		for (const [stateId, def] of Object.entries(ROBOT_STATES)) {
+			if (!stateId.startsWith('cleaning.') || !def.common.write) {
+				continue;
+			}
+			const fullId = `${objId}.${stateId}`;
+			const current = await this.getStateAsync(fullId);
+			if (current && current.ack === false) {
+				await this.setState(fullId, { val: current.val, ack: true });
+			}
+		}
 	}
 
 	/**
@@ -518,7 +542,7 @@ class Vacuula extends utils.Adapter {
 	 *
 	 * @param {string} robotId - Robot id on the Vacuula server
 	 * @param {object} payload - Command payload
-	 * @returns {Promise<any>} the parsed response
+	 * @returns {Promise<object>} the parsed response
 	 */
 	async sendCommand(robotId, payload) {
 		const data = await this.request('POST', `/api/robot/${encodeURIComponent(robotId)}/command`, payload);
@@ -540,7 +564,7 @@ class Vacuula extends utils.Adapter {
 	 * @param {'GET' | 'POST'} method - HTTP method
 	 * @param {string} path - Path starting with "/"
 	 * @param {object} [body] - JSON body
-	 * @returns {Promise<any>} parsed response
+	 * @returns {Promise<object>} parsed response
 	 */
 	async request(method, path, body) {
 		const url = `${this.baseUrl}${path}`;
