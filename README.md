@@ -19,6 +19,9 @@ Connect to your Vacuula Server
 	Placeholder for the next version (at the beginning of the line):
 	### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+* (muffin142) updated dependencies
+
 ### 0.0.2 (2026-11-05)
 * (muffin142) enabled automated releases
 
