@@ -18,6 +18,9 @@ updates:
       # @types/node major must match the minimum supported Node.js version (engines.node)
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # typescript major must be supported by typescript-eslint (peer of @iobroker/eslint-config)
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
