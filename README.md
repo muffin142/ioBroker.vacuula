@@ -48,11 +48,28 @@ Every robot reported by the server is created as a device `vacuula.0.<robotId>`.
 | `cleaning.navigationMode` | number | ✓ | `1` Normal, `2` Extra Care, `3` Deep |
 | `cleaning.spotWidth` | number | ✓ | Width of the spot area in cm |
 | `cleaning.spotHeight` | number | ✓ | Height of the spot area in cm |
+| `cleaning.mapId` | string | ✓ | Map for map cleaning (`category = 4`), see `maps.<mapId>` |
+| `cleaning.boundaryId` | string | ✓ | Zone to clean for map cleaning (`category = 4`), see `maps.<mapId>.zone.<boundaryId>.id` |
 | `commands.start` | button | ✓ | Start cleaning with the current `cleaning.*` settings |
 | `commands.pause` | button | ✓ | Pause cleaning |
 | `commands.resume` | button | ✓ | Resume a paused cleaning |
 | `commands.stop` | button | ✓ | Stop cleaning |
 | `commands.findMe` | button | ✓ | Make the robot play a sound to locate it |
+
+### Maps, blocking lines and zones
+
+For every connected robot the maps are loaded on each polling cycle into `vacuula.0.<robotId>.maps.<mapId>`. The folder name is the map's name. For every enabled map its boundaries are loaded as well (boundaries of disabled maps are not updated): blocking lines (`polyline`) go to `…maps.<mapId>.blockingline.<boundaryId>`, zones (`polygon`) go to `…maps.<mapId>.zone.<boundaryId>`, each channel named after the boundary. Maps and boundaries that the server no longer reports are removed.
+
+| State | Type | Writable | Description |
+|---|---|---|---|
+| `maps.<mapId>.name` | string | – | Name of the map |
+| `maps.<mapId>.enabled` | boolean | – | Map is enabled |
+| `maps.<mapId>.<blockingline\|zone>.<boundaryId>.id` | string | – | ID of the boundary |
+| `maps.<mapId>.<blockingline\|zone>.<boundaryId>.color` | string | – | Color of the boundary, e.g. `#ff7a45` |
+| `maps.<mapId>.blockingline.<boundaryId>.enabled` | boolean | ✓ | Blocking line is active |
+| `maps.<mapId>.zone.<boundaryId>.enabled` | boolean | – | Zone is active |
+
+When you change `enabled` of a blocking line, the adapter reloads the boundaries of that map from the server, changes only this one boundary and sends the complete list back with `setMapBoundaries`. All other boundaries stay as they are. If this fails, the state is reset to the value on the server.
 
 ### Controlling a robot
 
@@ -63,7 +80,7 @@ The `cleaning.*` states reflect the settings reported by the robot and serve as 
 1. Set the desired values, e.g. `cleaning.category = 3`, `cleaning.mode = 1`, `cleaning.spotWidth = 200`, `cleaning.spotHeight = 200` for a 2 × 2 m spot cleaning in eco mode.
 2. Set `commands.start` to `true`.
 
-Values written by you (ack = false) are not overwritten by polling until the cleaning has been started; afterwards the values reported by the robot are shown again. The start command always sends `category`, `mode` and `navigationMode`; `spotWidth` and `spotHeight` are only sent for spot cleaning (`category = 3`).
+Values written by you (ack = false) are not overwritten by polling until the cleaning has been started; afterwards the values reported by the robot are shown again. The start command always sends `category`, `mode` and `navigationMode`; `spotWidth` and `spotHeight` are only sent for spot cleaning (`category = 3`). For map cleaning (`category = 4`), `mapId` and `boundaryId` are sent if they are not empty. Without `boundaryId` the whole map is cleaned. `boundaryId` requires `mapId`.
 
 Example (JavaScript adapter):
 
@@ -84,7 +101,9 @@ Connection problems and failed commands are written to the ioBroker log. A persi
 	### **WORK IN PROGRESS**
 -->
 ### **WORK IN PROGRESS**
-*
+* (muffin142) maps with their blocking lines and zones are loaded; blocking lines can be enabled/disabled
+* (muffin142) map cleaning of a single zone via `cleaning.mapId` / `cleaning.boundaryId`
+* (muffin142) alerts reported in command responses are no longer logged as warning
 
 ### 0.0.2 (2026-11-05)
 * (muffin142) enabled automated releases
