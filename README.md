@@ -11,11 +11,7 @@
 
 ## Vacuula Adapter for ioBroker
 
-Connect to your [Vacuula Server](https://github.com/vacuula/vacuula) and regain control of your Neato robot vacuum in ioBroker
-
-## Usage
-
-The adapter connects to a Vacuula server via its HTTP API, discovers all robots registered there and exposes their status and controls as ioBroker states. A running and reachable Vacuula server is required; the robots themselves are never contacted directly.
+The adapter connects to a [Vacuula Server](https://github.com/vacuula/vacuula) via its HTTP API, discovers all Neato robots registered there and exposes their status and controls as ioBroker states. A running and reachable Vacuula server is required; the robots themselves are never contacted directly.
 
 ### Configuration
 

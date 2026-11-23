@@ -45,18 +45,18 @@ const ROBOT_STATES = {
 	},
 	'status.error': {
 		path: ['error'],
-		common: { name: 'Error message', type: 'string', role: 'indicator', read: true, write: false },
+		common: { name: 'Error message', type: 'string', role: 'text', read: true, write: false },
 	},
 	'status.alert': {
 		path: ['alert'],
-		common: { name: 'Alert message', type: 'string', role: 'indicator', read: true, write: false },
+		common: { name: 'Alert message', type: 'string', role: 'text', read: true, write: false },
 	},
 	'status.state': {
 		path: ['state'],
 		common: {
 			name: 'State',
 			type: 'number',
-			role: 'indicator',
+			role: 'value.state',
 			read: true,
 			write: false,
 			states: { 1: 'Idle', 2: 'Cleaning', 3: 'Paused', 4: 'Docking' },
@@ -67,7 +67,7 @@ const ROBOT_STATES = {
 		common: {
 			name: 'Action',
 			type: 'number',
-			role: 'indicator',
+			role: 'value',
 			read: true,
 			write: false,
 			states: { 4: 'Docking', 9: 'Recovering location', 11: 'Cleaning', 13: 'Acquiring map IDs' },
@@ -102,7 +102,7 @@ const ROBOT_STATES = {
 		common: {
 			name: 'Power mode',
 			type: 'number',
-			role: 'level',
+			role: 'level.mode.cleanup',
 			states: { 1: 'Eco', 2: 'Normal' },
 			read: true,
 			write: true,
@@ -113,7 +113,7 @@ const ROBOT_STATES = {
 		common: {
 			name: 'Modifier',
 			type: 'number',
-			role: 'value',
+			role: 'level',
 			states: { 1: 'Normal', 2: 'Intensive' },
 			min: 1,
 			max: 2,
