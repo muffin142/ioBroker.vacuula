@@ -48,14 +48,14 @@ Every robot reported by the server is created as a device `vacuula.0.<robotId>`.
 | `status.navigationMode` | number | – | Navigation mode reported by the robot: `1` Normal, `2` Extra Care, `3` Deep |
 | `status.spotWidth` | number | – | Spot width reported by the robot in cm |
 | `status.spotHeight` | number | – | Spot height reported by the robot in cm |
-| `cleaningParameters.category` | number | ✓ | Cleaning type for the next start: `2` House, `3` Spot, `4` Map |
-| `cleaningParameters.mode` | number | ✓ | `1` Eco, `2` Normal |
-| `cleaningParameters.navigationMode` | number | ✓ | `1` Normal, `2` Extra Care, `3` Deep |
-| `cleaningParameters.spotWidth` | number | ✓ | Width of the spot area in cm |
-| `cleaningParameters.spotHeight` | number | ✓ | Height of the spot area in cm |
-| `cleaningParameters.mapId` | string | ✓ | Map for map cleaning (`category = 4`), see `maps.<mapId>.id` |
-| `cleaningParameters.boundaryId` | string | ✓ | Zone to clean for map cleaning (`category = 4`), see `maps.<mapId>.zone.<boundaryId>.id` |
-| `commands.start` | button | ✓ | Start cleaning with the current `cleaningParameters.*` |
+| `parameters.category` | number | ✓ | Cleaning type for the next start: `2` House, `3` Spot, `4` Map |
+| `parameters.mode` | number | ✓ | `1` Eco, `2` Normal |
+| `parameters.navigationMode` | number | ✓ | `1` Normal, `2` Extra Care, `3` Deep |
+| `parameters.spotWidth` | number | ✓ | Width of the spot area in cm |
+| `parameters.spotHeight` | number | ✓ | Height of the spot area in cm |
+| `parameters.mapId` | string | ✓ | Map for map cleaning (`category = 4`), see `maps.<mapId>.id` |
+| `parameters.boundaryId` | string | ✓ | Zone to clean for map cleaning (`category = 4`), see `maps.<mapId>.zone.<boundaryId>.id` |
+| `commands.start` | button | ✓ | Start cleaning with the current `parameters.*` |
 | `commands.pause` | button | ✓ | Pause cleaning |
 | `commands.resume` | button | ✓ | Resume a paused cleaning |
 | `commands.stop` | button | ✓ | Stop cleaning |
@@ -71,7 +71,7 @@ Maps and boundaries that the server no longer reports are **not** deleted, so th
 
 | State | Type | Writable | Description |
 |---|---|---|---|
-| `maps.<mapId>.id` | string | – | ID of the map (e.g. for `cleaningParameters.mapId`) |
+| `maps.<mapId>.id` | string | – | ID of the map (e.g. for `parameters.mapId`) |
 | `maps.<mapId>.name` | string | – | Name of the map |
 | `maps.<mapId>.enabled` | boolean | – | Map is enabled |
 | `maps.<mapId>.<blockingline\|zone>.<boundaryId>.id` | string | – | ID of the boundary |
@@ -85,19 +85,19 @@ When you change `enabled` of a blocking line, the adapter reloads the boundaries
 
 Commands are triggered by setting the corresponding `commands.*` state to `true` (without ack). The adapter sends the command to the server, resets the button to `false` and immediately refreshes the robot's state. Commands the robot cannot execute in its current situation (e.g. `resume` while not paused) are rejected by the server and logged as an error.
 
-The `cleaningParameters.*` states are the parameters for `commands.start`. They are set only by you, never by polling. The values the robot itself reports are shown read-only under `status.category`, `status.mode`, `status.navigationMode`, `status.spotWidth` and `status.spotHeight` and are updated on every refresh.
+The `parameters.*` states are the parameters for `commands.start`. They are set only by you, never by polling. The values the robot itself reports are shown read-only under `status.category`, `status.mode`, `status.navigationMode`, `status.spotWidth` and `status.spotHeight` and are updated on every refresh.
 
-1. Set the desired values, e.g. `cleaningParameters.category = 3`, `cleaningParameters.mode = 1`, `cleaningParameters.spotWidth = 200`, `cleaningParameters.spotHeight = 200` for a 2 × 2 m spot cleaning in eco mode.
+1. Set the desired values, e.g. `parameters.category = 3`, `parameters.mode = 1`, `parameters.spotWidth = 200`, `parameters.spotHeight = 200` for a 2 × 2 m spot cleaning in eco mode.
 2. Set `commands.start` to `true`.
 
-Every value you write is checked immediately. A valid value is confirmed (ack = true) and kept for the next start; an invalid value (e.g. `cleaningParameters.mode = 7`) is rejected with a warning in the log and the previous value is restored. A parameter without a value is filled once with the value reported by the robot. The start command always sends `category`, `mode` and `navigationMode`; `spotWidth` and `spotHeight` are only sent for spot cleaning (`category = 3`). For map cleaning (`category = 4`), `mapId` and `boundaryId` are sent if they are not empty. Without `boundaryId` the whole map is cleaned. `boundaryId` requires `mapId`.
+Every value you write is checked immediately. A valid value is confirmed (ack = true) and kept for the next start; an invalid value (e.g. `parameters.mode = 7`) is rejected with a warning in the log and the previous value is restored. A parameter without a value is filled once with the value reported by the robot. The start command always sends `category`, `mode` and `navigationMode`; `spotWidth` and `spotHeight` are only sent for spot cleaning (`category = 3`). For map cleaning (`category = 4`), `mapId` and `boundaryId` are sent if they are not empty. Without `boundaryId` the whole map is cleaned. `boundaryId` requires `mapId`.
 
 Example (JavaScript adapter):
 
 ```js
 const robot = 'vacuula.0.OPS36118-f045da63f5f4';
-await setStateAsync(`${robot}.cleaningParameters.category`, 2); // House
-await setStateAsync(`${robot}.cleaningParameters.mode`, 2);     // Normal
+await setStateAsync(`${robot}.parameters.category`, 2); // House
+await setStateAsync(`${robot}.parameters.mode`, 2);     // Normal
 await setStateAsync(`${robot}.commands.start`, true);
 ```
 
@@ -112,10 +112,10 @@ Connection problems and failed commands are written to the ioBroker log. A persi
 -->
 ### **WORK IN PROGRESS**
 * (muffin142) maps with their blocking lines and zones are loaded; blocking lines can be enabled/disabled
-* (muffin142) map cleaning of a single zone via `cleaningParameters.mapId` / `cleaningParameters.boundaryId`
+* (muffin142) map cleaning of a single zone via `parameters.mapId` / `parameters.boundaryId`
 * (muffin142) polling interval is limited to 3600 s in the adapter code as well
 * (muffin142) `info.modelName` and `info.firmware` moved to `status.modelName` and `status.firmware`
-* (muffin142) `cleaning` renamed to `cleaningParameters`; its states are only set by the user, validated and acknowledged immediately; the values reported by the robot are mirrored read-only to `status`
+* (muffin142) `cleaning` renamed to `parameters`; its states are only set by the user, validated and acknowledged immediately; the values reported by the robot are mirrored read-only to `status`
 
 ### 0.0.2 (2026-11-05)
 * (muffin142) enabled automated releases

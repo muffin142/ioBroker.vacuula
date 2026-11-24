@@ -147,7 +147,7 @@ const ROBOT_STATES = {
 };
 
 /**
- * Writable parameters for "startCleaning" in <robot>.cleaningParameters.<key>.
+ * Writable parameters for "startCleaning" in <robot>.parameters.<key>.
  * "status" names the read-only state in ROBOT_STATES with the value reported by the robot;
  * it is used to fill an empty parameter once.
  *
@@ -321,7 +321,7 @@ class Vacuula extends utils.Adapter {
 		}
 
 		this.subscribeStates('*.commands.*');
-		this.subscribeStates('*.cleaningParameters.*');
+		this.subscribeStates('*.parameters.*');
 		this.subscribeStates('*.maps.*.enabled');
 
 		await this.poll();
@@ -493,7 +493,7 @@ class Vacuula extends utils.Adapter {
 
 		const channels = {
 			status: 'Status',
-			cleaningParameters: 'Cleaning parameters',
+			parameters: 'Cleaning parameters',
 			commands: 'Commands',
 		};
 		for (const [channel, channelName] of Object.entries(channels)) {
@@ -513,7 +513,7 @@ class Vacuula extends utils.Adapter {
 		}
 
 		for (const [key, def] of Object.entries(CLEANING_PARAMETERS)) {
-			await this.extendObject(`${objId}.cleaningParameters.${key}`, {
+			await this.extendObject(`${objId}.parameters.${key}`, {
 				type: 'state',
 				common: /** @type {ioBroker.StateCommon} */ (def.common),
 				native: {},
@@ -855,8 +855,8 @@ class Vacuula extends utils.Adapter {
 			return;
 		}
 
-		// <namespace>.<objId>.cleaningParameters.<key>
-		if (parts.length === 3 && parts[1] === 'cleaningParameters' && CLEANING_PARAMETERS[parts[2]]) {
+		// <namespace>.<objId>.parameters.<key>
+		if (parts.length === 3 && parts[1] === 'parameters' && CLEANING_PARAMETERS[parts[2]]) {
 			await this.setCleaningParameter(id, parts[0], parts[2], state.val);
 			return;
 		}
@@ -936,7 +936,6 @@ class Vacuula extends utils.Adapter {
 
 	/**
 	 * Reads the cleaning parameters of a robot from its states into the internal store.
-	 * Empty parameters are taken over from the former "cleaning" channel if it still exists.
 	 *
 	 * @param {string} objId - Object id of the robot device
 	 */
@@ -944,18 +943,9 @@ class Vacuula extends utils.Adapter {
 		/** @type {Record<string, number | string>} */
 		const params = {};
 		for (const key of Object.keys(CLEANING_PARAMETERS)) {
-			const id = `${objId}.cleaningParameters.${key}`;
+			const id = `${objId}.parameters.${key}`;
 			const state = await this.getStateAsync(id);
-			let value = this.normalizeCleaningParameter(key, state ? state.val : null);
-			let migrated = false;
-			if (value === undefined || value === '') {
-				const legacy = await this.getStateAsync(`${objId}.cleaning.${key}`);
-				const legacyValue = legacy ? this.normalizeCleaningParameter(key, legacy.val) : undefined;
-				if (legacyValue !== undefined && legacyValue !== '') {
-					value = legacyValue;
-					migrated = true;
-				}
-			}
+			const value = this.normalizeCleaningParameter(key, state ? state.val : null);
 			if (value === undefined) {
 				if (state && !state.ack) {
 					this.log.warn(`Invalid value "${state.val}" for ${id}, ignoring it`);
@@ -964,7 +954,7 @@ class Vacuula extends utils.Adapter {
 				continue;
 			}
 			params[key] = value;
-			if (migrated || !state || !state.ack || state.val !== value) {
+			if (!state || !state.ack || state.val !== value) {
 				await this.setState(id, { val: value, ack: true });
 			}
 		}
@@ -990,14 +980,14 @@ class Vacuula extends utils.Adapter {
 			const value = this.normalizeCleaningParameter(key, raw);
 			if (value !== undefined) {
 				params[key] = value;
-				await this.setState(`${objId}.cleaningParameters.${key}`, { val: value, ack: true });
+				await this.setState(`${objId}.parameters.${key}`, { val: value, ack: true });
 				this.log.debug(`Cleaning parameter ${key} of ${objId} initialised with ${value} reported by the robot`);
 			}
 		}
 	}
 
 	/**
-	 * Handles a write to <robot>.cleaningParameters.<key>: validates the value, stores it for the next
+	 * Handles a write to <robot>.parameters.<key>: validates the value, stores it for the next
 	 * start and acknowledges the state. Invalid values are rejected and the previous value is restored.
 	 *
 	 * @param {string} id - Full id of the changed state
@@ -1034,7 +1024,7 @@ class Vacuula extends utils.Adapter {
 		/** @param {string} key - Parameter key */
 		const get = key => {
 			if (stored[key] === undefined) {
-				throw new Error(`cleaningParameters.${key} has no valid value`);
+				throw new Error(`parameters.${key} has no valid value`);
 			}
 			return stored[key];
 		};
@@ -1054,7 +1044,7 @@ class Vacuula extends utils.Adapter {
 			const mapId = String(stored.mapId || '');
 			const boundaryId = String(stored.boundaryId || '');
 			if (boundaryId && !mapId) {
-				throw new Error('cleaningParameters.boundaryId is set, but cleaningParameters.mapId is empty');
+				throw new Error('parameters.boundaryId is set, but parameters.mapId is empty');
 			}
 			if (mapId) {
 				params.mapId = mapId;
