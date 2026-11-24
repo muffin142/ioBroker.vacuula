@@ -113,9 +113,6 @@ Connection problems and failed commands are written to the ioBroker log. A persi
 ### **WORK IN PROGRESS**
 * (muffin142) maps with their blocking lines and zones are loaded; blocking lines can be enabled/disabled
 * (muffin142) map cleaning of a single zone via `parameters.mapId` / `parameters.boundaryId`
-* (muffin142) polling interval is limited to 3600 s in the adapter code as well
-* (muffin142) `info.modelName` and `info.firmware` moved to `status.modelName` and `status.firmware`
-* (muffin142) `cleaning` renamed to `parameters`; its states are only set by the user, validated and acknowledged immediately; the values reported by the robot are mirrored read-only to `status`
 
 ### 0.0.2 (2026-11-05)
 * (muffin142) enabled automated releases
