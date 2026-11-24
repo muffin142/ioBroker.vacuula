@@ -32,16 +32,16 @@
     },
     "titleLang": {
       "en": "Vacuula",
-      "de": "Vakuula",
-      "ru": "Вакуула",
-      "pt": "Vácuula",
-      "nl": "Vacuüm",
-      "fr": "Vacuule",
-      "it": "Vacuolo",
-      "es": "vacuula",
+      "de": "Vacuula",
+      "ru": "Vacuula",
+      "pt": "Vacuula",
+      "nl": "Vacuula",
+      "fr": "Vacuula",
+      "it": "Vacuula",
+      "es": "Vacuula",
       "pl": "Vacuula",
-      "uk": "Вакуула",
-      "zh-cn": "真空"
+      "uk": "Vacuula",
+      "zh-cn": "Vacuula"
     },
     "desc": {
       "en": "Connect to your Vacuula Server",

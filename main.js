@@ -5,12 +5,13 @@
  */
 
 const utils = require('@iobroker/adapter-core');
-const { I18n } = require('./lib/i18n');
 
 /** Timeout for a single HTTP request against the Vacuula server (ms) */
 const REQUEST_TIMEOUT = 10000;
 /** Lower bound for the polling interval (s) */
 const MIN_POLL_INTERVAL = 5;
+/** Upper bound for the polling interval (s), same as in admin/jsonConfig.json */
+const MAX_POLL_INTERVAL = 3600;
 
 /**
  * States which are filled from the response of the "getRobotState" command.
@@ -19,11 +20,11 @@ const MIN_POLL_INTERVAL = 5;
  * @type {Record<string, {path: string[], common: Partial<ioBroker.StateCommon>}>}
  */
 const ROBOT_STATES = {
-	'info.modelName': {
+	'status.modelName': {
 		path: ['meta', 'modelName'],
 		common: { name: 'Model name', type: 'string', role: 'text', read: true, write: false },
 	},
-	'info.firmware': {
+	'status.firmware': {
 		path: ['meta', 'firmware'],
 		common: { name: 'Firmware', type: 'string', role: 'info.firmware', read: true, write: false },
 	},
@@ -87,8 +88,74 @@ const ROBOT_STATES = {
 			write: false,
 		},
 	},
-	'cleaning.category': {
+	// cleaning parameters as reported by the robot (read only), see CLEANING_PARAMETERS for the writable ones
+	'status.category': {
 		path: ['cleaning', 'category'],
+		common: {
+			name: 'Cleaning mode (reported by robot)',
+			type: 'number',
+			role: 'value',
+			states: { 2: 'House', 3: 'Spot', 4: 'Map' },
+			read: true,
+			write: false,
+		},
+	},
+	'status.mode': {
+		path: ['cleaning', 'mode'],
+		common: {
+			name: 'Power mode (reported by robot)',
+			type: 'number',
+			role: 'value',
+			states: { 1: 'Eco', 2: 'Normal' },
+			read: true,
+			write: false,
+		},
+	},
+	'status.navigationMode': {
+		path: ['cleaning', 'navigationMode'],
+		common: {
+			name: 'Navigation mode (reported by robot)',
+			type: 'number',
+			role: 'value',
+			states: { 1: 'Normal', 2: 'Extra Care', 3: 'Deep' },
+			read: true,
+			write: false,
+		},
+	},
+	'status.spotWidth': {
+		path: ['cleaning', 'spotWidth'],
+		common: {
+			name: 'Spot width (reported by robot)',
+			type: 'number',
+			role: 'value',
+			unit: 'cm',
+			read: true,
+			write: false,
+		},
+	},
+	'status.spotHeight': {
+		path: ['cleaning', 'spotHeight'],
+		common: {
+			name: 'Spot height (reported by robot)',
+			type: 'number',
+			role: 'value',
+			unit: 'cm',
+			read: true,
+			write: false,
+		},
+	},
+};
+
+/**
+ * Writable parameters for "startCleaning" in <robot>.cleaningParameters.<key>.
+ * "status" names the read-only state in ROBOT_STATES with the value reported by the robot;
+ * it is used to fill an empty parameter once.
+ *
+ * @type {Record<string, {status?: string, common: Partial<ioBroker.StateCommon>}>}
+ */
+const CLEANING_PARAMETERS = {
+	category: {
+		status: 'status.category',
 		common: {
 			name: 'Cleaning mode',
 			type: 'number',
@@ -98,32 +165,19 @@ const ROBOT_STATES = {
 			write: true,
 		},
 	},
-	'cleaning.mode': {
-		path: ['cleaning', 'mode'],
+	mode: {
+		status: 'status.mode',
 		common: {
 			name: 'Power mode',
 			type: 'number',
-			role: 'level.mode.cleanup',
+			role: 'level',
 			states: { 1: 'Eco', 2: 'Normal' },
 			read: true,
 			write: true,
 		},
 	},
-	'cleaning.modifier': {
-		path: ['cleaning', 'modifier'],
-		common: {
-			name: 'Modifier',
-			type: 'number',
-			role: 'level',
-			states: { 1: 'Normal', 2: 'Intensive' },
-			min: 1,
-			max: 2,
-			read: true,
-			write: true,
-		},
-	},
-	'cleaning.navigationMode': {
-		path: ['cleaning', 'navigationMode'],
+	navigationMode: {
+		status: 'status.navigationMode',
 		common: {
 			name: 'Navigation mode',
 			type: 'number',
@@ -133,26 +187,24 @@ const ROBOT_STATES = {
 			write: true,
 		},
 	},
-	'cleaning.spotWidth': {
-		path: ['cleaning', 'spotWidth'],
+	spotWidth: {
+		status: 'status.spotWidth',
 		common: { name: 'Spot width', type: 'number', role: 'level', unit: 'cm', min: 0, read: true, write: true },
 	},
-	'cleaning.spotHeight': {
-		path: ['cleaning', 'spotHeight'],
+	spotHeight: {
+		status: 'status.spotHeight',
 		common: { name: 'Spot height', type: 'number', role: 'level', unit: 'cm', min: 0, read: true, write: true },
 	},
-	'cleaning.mapId': {
-		path: ['cleaning', 'mapId'],
+	mapId: {
 		common: { name: 'Map ID for map cleaning', type: 'string', role: 'text', read: true, write: true, def: '' },
 	},
-	'cleaning.boundaryId': {
-		path: ['cleaning', 'boundaryId'],
+	boundaryId: {
 		common: { name: 'Zone ID for map cleaning', type: 'string', role: 'text', read: true, write: true, def: '' },
 	},
 };
 
 /**
- * Command buttons. "cmd" is sent as payload, "start" builds its parameters from the cleaning states.
+ * Command buttons. "cmd" is sent as payload, "start" builds its parameters from the cleaning parameters.
  *
  * @type {Record<string, {name: string, cmd: string}>}
  */
@@ -216,9 +268,10 @@ class Vacuula extends utils.Adapter {
 		/** Per map promise chain, serializes read-modify-write of map boundaries */
 		/** @type {Map<string, Promise<void>>} */
 		this.mapQueues = new Map();
+		/** Validated cleaning parameters per robot object id, used for "startCleaning" */
+		/** @type {Map<string, Record<string, number | string>>} */
+		this.cleaningParameters = new Map();
 		this.unloading = false;
-		/** Translations of the log messages */
-		this.i18n = new I18n();
 
 		this.on('ready', this.onReady.bind(this));
 		this.on('stateChange', this.onStateChange.bind(this));
@@ -231,29 +284,29 @@ class Vacuula extends utils.Adapter {
 	async onReady() {
 		await this.setState('info.connection', false, true);
 
-		try {
-			const systemConfig = await this.getForeignObjectAsync('system.config');
-			this.i18n.setLanguage(systemConfig && systemConfig.common && systemConfig.common.language);
-		} catch {
-			// keep English
-		}
-
 		const protocol = this.config.protocol === 'https' ? 'https' : 'http';
 		const host = (this.config.host || '').trim().replace(/\/+$/, '');
 		if (!host) {
-			this.log.error(this.t('noServerAddress'));
+			this.log.error('No Vacuula server address configured. Please check the adapter settings.');
 			return;
 		}
 		this.baseUrl = `${protocol}://${host}`;
 
 		let interval = Number(this.config.pollInterval);
 		if (!Number.isFinite(interval) || interval < MIN_POLL_INTERVAL) {
-			this.log.warn(this.t('invalidPollInterval', { value: this.config.pollInterval, min: MIN_POLL_INTERVAL }));
+			this.log.warn(
+				`Invalid polling interval "${this.config.pollInterval}", using minimum of ${MIN_POLL_INTERVAL} seconds`,
+			);
 			interval = MIN_POLL_INTERVAL;
+		} else if (interval > MAX_POLL_INTERVAL) {
+			this.log.warn(
+				`Polling interval of ${interval} s is too long, using maximum of ${MAX_POLL_INTERVAL} seconds`,
+			);
+			interval = MAX_POLL_INTERVAL;
 		}
 		this.pollIntervalMs = interval * 1000;
 
-		this.log.info(this.t('usingServer', { url: this.baseUrl, interval }));
+		this.log.info(`Using Vacuula server ${this.baseUrl}, polling every ${interval} s`);
 
 		// Restore known robots from previous runs, so commands work before the first poll finished,
 		// and reset their connection state until the server confirms it.
@@ -268,6 +321,7 @@ class Vacuula extends utils.Adapter {
 		}
 
 		this.subscribeStates('*.commands.*');
+		this.subscribeStates('*.cleaningParameters.*');
 		this.subscribeStates('*.maps.*.enabled');
 
 		await this.poll();
@@ -286,7 +340,7 @@ class Vacuula extends utils.Adapter {
 			await this.updateRobots();
 		} catch (error) {
 			// updateRobots handles its own errors, this is only a safety net
-			this.log.error(this.t('unexpectedPollError', { reason: error.message }));
+			this.log.error(`Unexpected error while polling: ${error.message}`);
 		}
 
 		if (!this.unloading) {
@@ -306,13 +360,10 @@ class Vacuula extends utils.Adapter {
 		try {
 			robotList = await this.request('GET', '/api/robots');
 			if (!robotList || typeof robotList !== 'object' || Array.isArray(robotList)) {
-				throw new Error(this.t('unexpectedResponse', { response: JSON.stringify(robotList) }));
+				throw new Error(`unexpected response: ${JSON.stringify(robotList)}`);
 			}
 		} catch (error) {
-			this.reportError(
-				'server',
-				this.t('cannotFetchRobotList', { url: `${this.baseUrl}/api/robots`, reason: error.message }),
-			);
+			this.reportError('server', `Cannot fetch robot list from ${this.baseUrl}/api/robots: ${error.message}`);
 			// also covers HTTP errors / invalid answers of the robot list, the server is not usable then
 			await this.setConnected(false);
 			for (const objId of this.robots.keys()) {
@@ -321,7 +372,7 @@ class Vacuula extends utils.Adapter {
 			return;
 		}
 
-		this.clearError('server', this.t('serverConnected', { url: this.baseUrl }));
+		this.clearError('server', `Connection to Vacuula server ${this.baseUrl} established`);
 
 		const seen = new Set();
 		for (const [robotId, robot] of Object.entries(robotList)) {
@@ -344,7 +395,7 @@ class Vacuula extends utils.Adapter {
 				await this.setState(`${objId}.name`, name, true);
 				await this.setState(`${objId}.connected`, connected, true);
 			} catch (error) {
-				this.log.error(this.t('cannotUpdateRobotObjects', { robotId, reason: error.message }));
+				this.log.error(`Cannot create/update objects for robot ${robotId}: ${error.message}`);
 				continue;
 			}
 
@@ -352,7 +403,7 @@ class Vacuula extends utils.Adapter {
 				await this.updateRobotState(objId, robotId);
 				await this.updateMaps(objId, robotId);
 			} else {
-				this.log.debug(this.t('robotNotConnected', { name, robotId }));
+				this.log.debug(`Robot ${name} (${robotId}) is not connected, skipping state query`);
 			}
 		}
 
@@ -376,10 +427,10 @@ class Vacuula extends utils.Adapter {
 		try {
 			data = await this.sendCommand(robotId, { cmd: 'getRobotState' });
 		} catch (error) {
-			this.reportError(errorKey, this.t('cannotQueryRobotState', { robotId, reason: error.message }));
+			this.reportError(errorKey, `Cannot query state of robot ${robotId}: ${error.message}`);
 			return;
 		}
-		this.clearError(errorKey, this.t('robotStateAvailable', { robotId }));
+		this.clearError(errorKey, `State of robot ${robotId} available again`);
 
 		for (const [stateId, def] of Object.entries(ROBOT_STATES)) {
 			const raw = def.path.reduce((obj, key) => (obj == null ? undefined : obj[key]), data);
@@ -394,17 +445,10 @@ class Vacuula extends utils.Adapter {
 				value = raw === null ? '' : typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
 			}
 
-			const fullId = `${objId}.${stateId}`;
-			if (def.common.write) {
-				// Do not overwrite a value the user has just set (ack=false) and not yet used to start a cleaning.
-				const current = await this.getStateAsync(fullId);
-				if (current && current.ack === false) {
-					continue;
-				}
-			}
-			await this.setState(fullId, { val: value, ack: true });
+			await this.setState(`${objId}.${stateId}`, { val: value, ack: true });
 		}
 
+		await this.seedCleaningParameters(objId, data);
 		await this.setState(`${objId}.lastUpdate`, { val: Date.now(), ack: true });
 	}
 
@@ -448,9 +492,8 @@ class Vacuula extends utils.Adapter {
 		});
 
 		const channels = {
-			info: 'Information',
 			status: 'Status',
-			cleaning: 'Cleaning settings',
+			cleaningParameters: 'Cleaning parameters',
 			commands: 'Commands',
 		};
 		for (const [channel, channelName] of Object.entries(channels)) {
@@ -468,6 +511,15 @@ class Vacuula extends utils.Adapter {
 				native: {},
 			});
 		}
+
+		for (const [key, def] of Object.entries(CLEANING_PARAMETERS)) {
+			await this.extendObject(`${objId}.cleaningParameters.${key}`, {
+				type: 'state',
+				common: /** @type {ioBroker.StateCommon} */ (def.common),
+				native: {},
+			});
+		}
+		await this.loadCleaningParameters(objId);
 
 		for (const [command, def] of Object.entries(COMMANDS)) {
 			await this.extendObject(`${objId}.commands.${command}`, {
@@ -487,7 +539,7 @@ class Vacuula extends utils.Adapter {
 
 	/**
 	 * Loads all maps of a robot including their boundaries into vacuula.0.<robot>.maps.<map>.
-	 * Maps and boundaries which are no longer reported by the server are removed.
+	 * Maps and boundaries which are no longer reported by the server are kept (never deleted).
 	 *
 	 * @param {string} objId - Object id of the robot device
 	 * @param {string} robotId - Robot id on the Vacuula server
@@ -499,21 +551,19 @@ class Vacuula extends utils.Adapter {
 		try {
 			const data = await this.request('GET', `/api/robot/${encodeURIComponent(robotId)}/maps`);
 			if (!Array.isArray(data)) {
-				throw new Error(this.t('unexpectedResponse', { response: JSON.stringify(data) }));
+				throw new Error(`unexpected response: ${JSON.stringify(data)}`);
 			}
 			maps = data.filter(map => map && typeof map.id === 'string' && map.id);
 		} catch (error) {
-			this.reportError(errorKey, this.t('cannotLoadMaps', { robotId, reason: error.message }));
+			this.reportError(errorKey, `Cannot load maps of robot ${robotId}: ${error.message}`);
 			return;
 		}
-		this.clearError(errorKey, this.t('mapsAvailable', { robotId }));
+		this.clearError(errorKey, `Maps of robot ${robotId} available again`);
 
 		try {
 			await this.ensureObject(`${objId}.maps`, { type: 'folder', common: { name: 'Maps' }, native: {} });
 
-			/** Map object id -> kept boundary ids ("<folder>.<boundary>"), null if the boundaries could not be loaded */
-			/** @type {Map<string, Set<string> | null>} */
-			const keep = new Map();
+			// Maps/boundaries no longer reported by the server are never deleted; the user removes them manually.
 			for (const map of maps) {
 				const mapObjId = this.toObjectId(map.id);
 				const mapPath = `${objId}.maps.${mapObjId}`;
@@ -539,17 +589,13 @@ class Vacuula extends utils.Adapter {
 				await this.updateState(`${mapPath}.name`, name);
 				await this.updateState(`${mapPath}.enabled`, !!map.enabled);
 
+				// boundaries of disabled maps are not loaded
 				if (map.enabled) {
-					keep.set(mapObjId, await this.updateMapBoundaries(objId, robotId, mapObjId, map.id));
-				} else {
-					// disabled map: boundaries are not loaded, already existing objects are kept
-					keep.set(mapObjId, null);
+					await this.updateMapBoundaries(objId, robotId, mapObjId, map.id);
 				}
 			}
-
-			await this.removeStaleMapObjects(objId, keep);
 		} catch (error) {
-			this.log.error(this.t('cannotUpdateMapObjects', { robotId, reason: error.message }));
+			this.log.error(`Cannot create/update map objects for robot ${robotId}: ${error.message}`);
 		}
 	}
 
@@ -560,7 +606,6 @@ class Vacuula extends utils.Adapter {
 	 * @param {string} robotId - Robot id on the Vacuula server
 	 * @param {string} mapObjId - Object id of the map
 	 * @param {string} mapId - Map id on the Vacuula server
-	 * @returns {Promise<Set<string> | null>} ids ("<folder>.<boundary>") of the boundaries, null on error
 	 */
 	async updateMapBoundaries(objId, robotId, mapObjId, mapId) {
 		const errorKey = `boundaries:${robotId}:${mapId}`;
@@ -568,11 +613,14 @@ class Vacuula extends utils.Adapter {
 		try {
 			boundaries = await this.fetchMapBoundaries(robotId, mapId);
 		} catch (error) {
-			this.reportError(errorKey, this.t('cannotLoadBoundaries', { mapId, robotId, reason: error.message }));
-			return null;
+			this.reportError(
+				errorKey,
+				`Cannot load boundaries of map "${mapId}" of robot ${robotId}: ${error.message}`,
+			);
+			return;
 		}
-		this.clearError(errorKey, this.t('boundariesAvailable', { mapId, robotId }));
-		return this.writeMapBoundaries(objId, mapObjId, mapId, boundaries);
+		this.clearError(errorKey, `Boundaries of map "${mapId}" of robot ${robotId} available again`);
+		await this.writeMapBoundaries(objId, mapObjId, mapId, boundaries);
 	}
 
 	/**
@@ -586,7 +634,7 @@ class Vacuula extends utils.Adapter {
 		const response = await this.sendCommand(robotId, { cmd: 'getMapBoundaries', params: { mapId } });
 		const boundaries = response && response.data && response.data.boundaries;
 		if (!Array.isArray(boundaries)) {
-			throw new Error(this.t('unexpectedResponse', { response: JSON.stringify(response) }));
+			throw new Error(`unexpected response: ${JSON.stringify(response)}`);
 		}
 		return boundaries;
 	}
@@ -598,11 +646,9 @@ class Vacuula extends utils.Adapter {
 	 * @param {string} mapObjId - Object id of the map
 	 * @param {string} mapId - Map id on the Vacuula server
 	 * @param {Array<Boundary>} boundaries - Boundaries as delivered by the server
-	 * @returns {Promise<Set<string>>} ids ("<folder>.<boundary>") of the written boundaries
 	 */
 	async writeMapBoundaries(objId, mapObjId, mapId, boundaries) {
 		const mapPath = `${objId}.maps.${mapObjId}`;
-		const written = new Set();
 
 		for (const [type, def] of Object.entries(BOUNDARY_TYPES)) {
 			const list = boundaries.filter(b => b && b.type === type && typeof b.id === 'string' && b.id);
@@ -616,9 +662,7 @@ class Vacuula extends utils.Adapter {
 			});
 
 			for (const boundary of list) {
-				const boundaryObjId = this.toObjectId(boundary.id);
-				const path = `${mapPath}.${def.folder}.${boundaryObjId}`;
-				written.add(`${def.folder}.${boundaryObjId}`);
+				const path = `${mapPath}.${def.folder}.${this.toObjectId(boundary.id)}`;
 
 				await this.ensureObject(path, {
 					type: 'channel',
@@ -655,49 +699,7 @@ class Vacuula extends utils.Adapter {
 
 		const unknown = boundaries.filter(b => !b || !BOUNDARY_TYPES[b.type]);
 		if (unknown.length) {
-			this.log.debug(this.t('ignoringUnknownBoundaries', { mapId, boundaries: JSON.stringify(unknown) }));
-		}
-		return written;
-	}
-
-	/**
-	 * Deletes objects of maps/boundaries which are no longer reported by the server.
-	 *
-	 * @param {string} objId - Object id of the robot device
-	 * @param {Map<string, Set<string> | null>} keep - Current maps and their boundaries (null = unknown, keep all)
-	 */
-	async removeStaleMapObjects(objId, keep) {
-		const prefix = `${this.namespace}.${objId}.maps.`;
-		const objects = await this.getForeignObjectsAsync(`${prefix}*`);
-		/** @type {Set<string>} */
-		const stale = new Set();
-
-		for (const fullId of Object.keys(objects)) {
-			const parts = fullId.substring(prefix.length).split('.');
-			const [mapObjId, folder, boundaryObjId] = parts;
-			if (!keep.has(mapObjId)) {
-				stale.add(`${objId}.maps.${mapObjId}`);
-				continue;
-			}
-			const boundaries = keep.get(mapObjId);
-			if (!boundaries || parts.length < 3) {
-				continue;
-			}
-			if (Object.values(BOUNDARY_TYPES).some(def => def.folder === folder)) {
-				if (!boundaries.has(`${folder}.${boundaryObjId}`)) {
-					stale.add(`${objId}.maps.${mapObjId}.${folder}.${boundaryObjId}`);
-				}
-			}
-		}
-
-		for (const id of stale) {
-			this.log.info(this.t('removingObjects', { id }));
-			await this.delObjectAsync(id, { recursive: true });
-			for (const cachedId of this.objectCache.keys()) {
-				if (cachedId === id || cachedId.startsWith(`${id}.`)) {
-					this.objectCache.delete(cachedId);
-				}
-			}
+			this.log.debug(`Ignoring boundaries of unknown type on map "${mapId}": ${JSON.stringify(unknown)}`);
 		}
 	}
 
@@ -716,11 +718,11 @@ class Vacuula extends utils.Adapter {
 		const mapId = channel && channel.native && channel.native.mapId;
 		const boundaryId = channel && channel.native && channel.native.boundaryId;
 		if (!robotId || !mapId || !boundaryId) {
-			this.log.warn(this.t('cannotChangeUnknown', { id }));
+			this.log.warn(`Cannot change ${id}: unknown robot, map or boundary`);
 			return;
 		}
 		if (!this.baseUrl) {
-			this.log.error(this.t('cannotChangeNoServer', { id }));
+			this.log.error(`Cannot change ${id}: no Vacuula server configured`);
 			return;
 		}
 
@@ -732,7 +734,7 @@ class Vacuula extends utils.Adapter {
 				const boundaries = await this.fetchMapBoundaries(robotId, mapId);
 				const boundary = boundaries.find(b => b && b.id === boundaryId);
 				if (!boundary) {
-					throw new Error(this.t('boundaryNotFound', { boundaryId, mapId }));
+					throw new Error(`boundary ${boundaryId} not found on map "${mapId}"`);
 				}
 				previous = !!boundary.enabled;
 				boundary.enabled = enabled;
@@ -740,15 +742,15 @@ class Vacuula extends utils.Adapter {
 
 				const payload = { cmd: 'setMapBoundaries', params: { mapId, boundaries } };
 				this.log.info(
-					this.t('settingBoundary', { name: boundary.name || boundaryId, mapId, robotId, value: enabled }),
+					`Setting "${boundary.name || boundaryId}" on map "${mapId}" of robot ${robotId} to enabled=${enabled}`,
 				);
-				this.log.debug(this.t('setMapBoundariesPayload', { payload: JSON.stringify(payload) }));
+				this.log.debug(`setMapBoundaries payload: ${JSON.stringify(payload)}`);
 				await this.sendCommand(robotId, payload);
 
 				await this.setState(id, enabled, true);
 				await this.writeMapBoundaries(objId, mapObjId, mapId, boundaries);
 			} catch (error) {
-				this.log.error(this.t('cannotChangeBoundary', { id, value: enabled, reason: error.message }));
+				this.log.error(`Cannot change ${id} to ${enabled}: ${error.message}`);
 				if (previous !== undefined) {
 					await this.setState(id, previous, true);
 				} else {
@@ -853,6 +855,12 @@ class Vacuula extends utils.Adapter {
 			return;
 		}
 
+		// <namespace>.<objId>.cleaningParameters.<key>
+		if (parts.length === 3 && parts[1] === 'cleaningParameters' && CLEANING_PARAMETERS[parts[2]]) {
+			await this.setCleaningParameter(id, parts[0], parts[2], state.val);
+			return;
+		}
+
 		if (!state.val) {
 			return;
 		}
@@ -866,15 +874,15 @@ class Vacuula extends utils.Adapter {
 		const robotId = this.robots.get(objId);
 
 		if (!def) {
-			this.log.warn(this.t('unknownCommand', { command }));
+			this.log.warn(`Unknown command "${command}"`);
 			return;
 		}
 		if (!robotId) {
-			this.log.warn(this.t('unknownRobot', { objId, command }));
+			this.log.warn(`Unknown robot "${objId}", cannot execute command "${command}"`);
 			return;
 		}
 		if (!this.baseUrl) {
-			this.log.error(this.t('cannotExecuteNoServer', { command }));
+			this.log.error(`Cannot execute command "${command}": no Vacuula server configured`);
 			return;
 		}
 
@@ -882,18 +890,14 @@ class Vacuula extends utils.Adapter {
 			/** @type {{cmd: string, params?: Record<string, number | string>}} */
 			const payload = { cmd: def.cmd };
 			if (command === 'start') {
-				payload.params = await this.buildStartParams(objId);
+				payload.params = this.buildStartParams(objId);
 			}
 
-			this.log.info(this.t('sendingCommand', { cmd: def.cmd, robotId, payload: JSON.stringify(payload) }));
+			this.log.info(`Sending "${def.cmd}" to robot ${robotId}: ${JSON.stringify(payload)}`);
 			await this.sendCommand(robotId, payload);
-			this.log.debug(this.t('commandAccepted', { cmd: def.cmd, robotId }));
-
-			if (command === 'start') {
-				await this.acknowledgeCleaningSettings(objId);
-			}
+			this.log.debug(`Command "${def.cmd}" for robot ${robotId} accepted`);
 		} catch (error) {
-			this.log.error(this.t('commandFailed', { cmd: def.cmd, robotId, reason: error.message }));
+			this.log.error(`Command "${def.cmd}" for robot ${robotId} failed: ${error.message}`);
 		} finally {
 			await this.setState(id, false, true);
 		}
@@ -903,49 +907,154 @@ class Vacuula extends utils.Adapter {
 	}
 
 	/**
-	 * Confirms user-set cleaning settings (ack=false) after a successful start, so that polling
-	 * shows the values reported by the robot again instead of skipping these states forever.
+	 * Validates and normalises a value for a cleaning parameter.
+	 *
+	 * @param {string} key - Key in CLEANING_PARAMETERS
+	 * @param {ioBroker.StateValue | undefined} raw - Value to check
+	 * @returns {number | string | undefined} normalised value, undefined if not set or invalid
+	 */
+	normalizeCleaningParameter(key, raw) {
+		const common = CLEANING_PARAMETERS[key].common;
+		if (common.type === 'string') {
+			return raw == null ? '' : String(raw).trim();
+		}
+		if (raw == null || raw === '' || typeof raw === 'boolean') {
+			return undefined;
+		}
+		const value = Number(raw);
+		if (!Number.isFinite(value)) {
+			return undefined;
+		}
+		if (common.states && typeof common.states === 'object' && !(String(value) in common.states)) {
+			return undefined;
+		}
+		if (typeof common.min === 'number' && value < common.min) {
+			return undefined;
+		}
+		return value;
+	}
+
+	/**
+	 * Reads the cleaning parameters of a robot from its states into the internal store.
+	 * Empty parameters are taken over from the former "cleaning" channel if it still exists.
 	 *
 	 * @param {string} objId - Object id of the robot device
 	 */
-	async acknowledgeCleaningSettings(objId) {
-		for (const [stateId, def] of Object.entries(ROBOT_STATES)) {
-			if (!stateId.startsWith('cleaning.') || !def.common.write) {
+	async loadCleaningParameters(objId) {
+		/** @type {Record<string, number | string>} */
+		const params = {};
+		for (const key of Object.keys(CLEANING_PARAMETERS)) {
+			const id = `${objId}.cleaningParameters.${key}`;
+			const state = await this.getStateAsync(id);
+			let value = this.normalizeCleaningParameter(key, state ? state.val : null);
+			let migrated = false;
+			if (value === undefined || value === '') {
+				const legacy = await this.getStateAsync(`${objId}.cleaning.${key}`);
+				const legacyValue = legacy ? this.normalizeCleaningParameter(key, legacy.val) : undefined;
+				if (legacyValue !== undefined && legacyValue !== '') {
+					value = legacyValue;
+					migrated = true;
+				}
+			}
+			if (value === undefined) {
+				if (state && !state.ack) {
+					this.log.warn(`Invalid value "${state.val}" for ${id}, ignoring it`);
+					await this.setState(id, { val: null, ack: true });
+				}
 				continue;
 			}
-			const fullId = `${objId}.${stateId}`;
-			const current = await this.getStateAsync(fullId);
-			if (current && current.ack === false) {
-				await this.setState(fullId, { val: current.val, ack: true });
+			params[key] = value;
+			if (migrated || !state || !state.ack || state.val !== value) {
+				await this.setState(id, { val: value, ack: true });
+			}
+		}
+		this.cleaningParameters.set(objId, params);
+	}
+
+	/**
+	 * Fills cleaning parameters that have no value yet with the values reported by the robot.
+	 *
+	 * @param {string} objId - Object id of the robot device
+	 * @param {object} data - Response of "getRobotState"
+	 */
+	async seedCleaningParameters(objId, data) {
+		const params = this.cleaningParameters.get(objId);
+		if (!params) {
+			return;
+		}
+		for (const [key, def] of Object.entries(CLEANING_PARAMETERS)) {
+			if (!def.status || params[key] !== undefined) {
+				continue;
+			}
+			const raw = ROBOT_STATES[def.status].path.reduce((obj, k) => (obj == null ? undefined : obj[k]), data);
+			const value = this.normalizeCleaningParameter(key, raw);
+			if (value !== undefined) {
+				params[key] = value;
+				await this.setState(`${objId}.cleaningParameters.${key}`, { val: value, ack: true });
+				this.log.debug(`Cleaning parameter ${key} of ${objId} initialised with ${value} reported by the robot`);
 			}
 		}
 	}
 
 	/**
-	 * Reads the cleaning states of a robot and builds the "startCleaning" parameters.
+	 * Handles a write to <robot>.cleaningParameters.<key>: validates the value, stores it for the next
+	 * start and acknowledges the state. Invalid values are rejected and the previous value is restored.
+	 *
+	 * @param {string} id - Full id of the changed state
+	 * @param {string} objId - Object id of the robot device
+	 * @param {string} key - Key in CLEANING_PARAMETERS
+	 * @param {ioBroker.StateValue} val - Written value
+	 */
+	async setCleaningParameter(id, objId, key, val) {
+		let params = this.cleaningParameters.get(objId);
+		if (!params) {
+			params = {};
+			this.cleaningParameters.set(objId, params);
+		}
+		const value = this.normalizeCleaningParameter(key, val);
+		if (value === undefined) {
+			const previous = params[key] === undefined ? null : params[key];
+			this.log.warn(`Invalid value "${val}" for ${id}, keeping ${previous === null ? 'no value' : previous}`);
+			await this.setState(id, { val: previous, ack: true });
+			return;
+		}
+		params[key] = value;
+		this.log.debug(`Cleaning parameter ${key} of ${objId} set to ${JSON.stringify(value)}`);
+		await this.setState(id, { val: value, ack: true });
+	}
+
+	/**
+	 * Builds the "startCleaning" parameters from the stored cleaning parameters of a robot.
 	 *
 	 * @param {string} objId - Object id of the robot device
-	 * @returns {Promise<Record<string, number | string>>} parameters for the start command
+	 * @returns {Record<string, number | string>} parameters for the start command
 	 */
-	async buildStartParams(objId) {
-		const keys = ['category', 'mode', 'navigationMode'];
-		const category = await this.readNumberState(`${objId}.cleaning.category`);
-		if (category === CATEGORY_SPOT) {
-			keys.push('spotHeight', 'spotWidth');
-		}
+	buildStartParams(objId) {
+		const stored = this.cleaningParameters.get(objId) || {};
+		/** @param {string} key - Parameter key */
+		const get = key => {
+			if (stored[key] === undefined) {
+				throw new Error(`cleaningParameters.${key} has no valid value`);
+			}
+			return stored[key];
+		};
 
 		/** @type {Record<string, number | string>} */
-		const params = {};
-		for (const key of keys) {
-			params[key] = await this.readNumberState(`${objId}.cleaning.${key}`);
+		const params = {
+			category: get('category'),
+			mode: get('mode'),
+			navigationMode: get('navigationMode'),
+		};
+		if (params.category === CATEGORY_SPOT) {
+			params.spotHeight = get('spotHeight');
+			params.spotWidth = get('spotWidth');
 		}
-
-		if (category === CATEGORY_MAP) {
+		if (params.category === CATEGORY_MAP) {
 			// both optional: without mapId the robot uses its current map, without boundaryId the whole map is cleaned
-			const mapId = await this.readStringState(`${objId}.cleaning.mapId`);
-			const boundaryId = await this.readStringState(`${objId}.cleaning.boundaryId`);
+			const mapId = String(stored.mapId || '');
+			const boundaryId = String(stored.boundaryId || '');
 			if (boundaryId && !mapId) {
-				throw new Error(this.t('boundaryWithoutMap'));
+				throw new Error('cleaningParameters.boundaryId is set, but cleaningParameters.mapId is empty');
 			}
 			if (mapId) {
 				params.mapId = mapId;
@@ -958,28 +1067,6 @@ class Vacuula extends utils.Adapter {
 	}
 
 	/**
-	 * @param {string} id - State id
-	 * @returns {Promise<string>} trimmed string value of the state, '' if not set
-	 */
-	async readStringState(id) {
-		const state = await this.getStateAsync(id);
-		return state && state.val != null ? String(state.val).trim() : '';
-	}
-
-	/**
-	 * @param {string} id - State id
-	 * @returns {Promise<number>} numeric value of the state
-	 */
-	async readNumberState(id) {
-		const state = await this.getStateAsync(id);
-		const value = state ? Number(state.val) : NaN;
-		if (state == null || state.val === null || state.val === '' || !Number.isFinite(value)) {
-			throw new Error(this.t('noNumericValue', { id }));
-		}
-		return value;
-	}
-
-	/**
 	 * Sends a command to a robot and checks the result.
 	 *
 	 * @param {string} robotId - Robot id on the Vacuula server
@@ -989,13 +1076,13 @@ class Vacuula extends utils.Adapter {
 	async sendCommand(robotId, payload) {
 		const data = await this.request('POST', `/api/robot/${encodeURIComponent(robotId)}/command`, payload);
 		if (!data || typeof data !== 'object') {
-			throw new Error(this.t('unexpectedResponse', { response: JSON.stringify(data) }));
+			throw new Error(`unexpected response: ${JSON.stringify(data)}`);
 		}
 		if (data.result !== undefined && data.result !== 'ok') {
 			throw new Error(
 				data.error
-					? this.t('robotAnsweredWithError', { result: data.result, error: JSON.stringify(data.error) })
-					: this.t('robotAnswered', { result: data.result }),
+					? `robot answered "${data.result}" (${JSON.stringify(data.error)})`
+					: `robot answered "${data.result}"`,
 			);
 		}
 		return data;
@@ -1011,11 +1098,7 @@ class Vacuula extends utils.Adapter {
 	 */
 	async request(method, path, body) {
 		const url = `${this.baseUrl}${path}`;
-		this.log.debug(
-			body
-				? this.t('requestWithBody', { method, url, body: JSON.stringify(body) })
-				: this.t('request', { method, url }),
-		);
+		this.log.debug(body ? `${method} ${url} ${JSON.stringify(body)}` : `${method} ${url}`);
 
 		let response;
 		try {
@@ -1029,12 +1112,10 @@ class Vacuula extends utils.Adapter {
 			// server not reachable (network error, refused, timeout, TLS error, ...)
 			await this.setConnected(false);
 			if (error.name === 'TimeoutError') {
-				throw new Error(this.t('timeout', { seconds: REQUEST_TIMEOUT / 1000 }));
+				throw new Error(`timeout after ${REQUEST_TIMEOUT / 1000} s`);
 			}
 			throw new Error(
-				error.cause && error.cause.message
-					? this.t('networkError', { message: error.message, cause: error.cause.message })
-					: error.message,
+				error.cause && error.cause.message ? `${error.message} (${error.cause.message})` : error.message,
 			);
 		}
 
@@ -1043,19 +1124,15 @@ class Vacuula extends utils.Adapter {
 			// server answered, but the request failed (e.g. robot offline) -> connection state unchanged
 			throw new Error(
 				text
-					? this.t('httpErrorWithBody', {
-							status: response.status,
-							statusText: response.statusText,
-							body: text,
-						})
-					: this.t('httpError', { status: response.status, statusText: response.statusText }),
+					? `HTTP ${response.status} ${response.statusText}: ${text}`
+					: `HTTP ${response.status} ${response.statusText}`,
 			);
 		}
 		let data;
 		try {
 			data = JSON.parse(text);
 		} catch {
-			throw new Error(this.t('invalidJson', { text: text.substring(0, 200) }));
+			throw new Error(`invalid JSON response: ${text.substring(0, 200)}`);
 		}
 		await this.setConnected(true);
 		return data;
@@ -1100,22 +1177,13 @@ class Vacuula extends utils.Adapter {
 	}
 
 	/**
-	 * Translates a log message, see lib/i18n/<language>.json.
+	 * Object id for robots, maps and boundaries: every character except a-z, A-Z, 0-9, "_" and "-" is replaced by "-".
 	 *
-	 * @param {string} key - Message key
-	 * @param {Record<string, unknown>} [params] - Values for the {placeholders}
-	 * @returns {string} translated message
-	 */
-	t(key, params) {
-		return this.i18n.t(key, params);
-	}
-
-	/**
-	 * @param {string} robotId - Robot id on the Vacuula server
+	 * @param {string} id - Map or boundary id on the Vacuula server
 	 * @returns {string} id usable as ioBroker object id
 	 */
-	toObjectId(robotId) {
-		return robotId.replace(this.FORBIDDEN_CHARS, '_').replace(/\./g, '_');
+	toObjectId(id) {
+		return id.replace(/[^a-zA-Z0-9_-]/g, '-');
 	}
 
 	/**
@@ -1133,7 +1201,7 @@ class Vacuula extends utils.Adapter {
 			this.setState('info.connection', false, true);
 			callback();
 		} catch (error) {
-			this.log.error(this.t('unloadError', { reason: error.message }));
+			this.log.error(`Error during unloading: ${error.message}`);
 			callback();
 		}
 	}

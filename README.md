@@ -31,9 +31,9 @@ Every robot reported by the server is created as a device `vacuula.0.<robotId>`.
 |---|---|---|---|
 | `name` | string | – | Name of the robot as configured on the server |
 | `connected` | boolean | – | Robot is connected to the Vacuula server |
-| `lastUpdate` | number | – | Time of the last successful update of the robot state (`info.*`, `status.*`, `cleaning.*`), ms since epoch |
-| `info.modelName` | string | – | Model, e.g. `BotVacD7Connected` |
-| `info.firmware` | string | – | Firmware version |
+| `lastUpdate` | number | – | Time of the last successful update of the robot state (`status.*`), ms since epoch |
+| `status.modelName` | string | – | Model, e.g. `BotVacD7Connected` |
+| `status.firmware` | string | – | Firmware version |
 | `status.state` | number | – | `1` Idle, `2` Cleaning, `3` Paused, `4` Docking |
 | `status.action` | number | – | Current action, e.g. `4` Docking, `9` Recovering location, `11` Cleaning, `13` Acquiring map IDs |
 | `status.charge` | number | – | Battery level in % |
@@ -43,15 +43,19 @@ Every robot reported by the server is created as a device `vacuula.0.<robotId>`.
 | `status.isScheduleEnabled` | boolean | – | Cleaning schedule is enabled on the robot |
 | `status.error` | string | – | Current error reported by the robot, empty if none |
 | `status.alert` | string | – | Current alert reported by the robot, empty if none |
-| `cleaning.category` | number | ✓ | Cleaning type: `2` House, `3` Spot, `4` Map |
-| `cleaning.mode` | number | ✓ | `1` Eco, `2` Normal |
-| `cleaning.modifier` | number | ✓ | `1` Normal, `2` Intensive |
-| `cleaning.navigationMode` | number | ✓ | `1` Normal, `2` Extra Care, `3` Deep |
-| `cleaning.spotWidth` | number | ✓ | Width of the spot area in cm |
-| `cleaning.spotHeight` | number | ✓ | Height of the spot area in cm |
-| `cleaning.mapId` | string | ✓ | Map for map cleaning (`category = 4`), see `maps.<mapId>` |
-| `cleaning.boundaryId` | string | ✓ | Zone to clean for map cleaning (`category = 4`), see `maps.<mapId>.zone.<boundaryId>.id` |
-| `commands.start` | button | ✓ | Start cleaning with the current `cleaning.*` settings |
+| `status.category` | number | – | Cleaning type reported by the robot: `2` House, `3` Spot, `4` Map |
+| `status.mode` | number | – | Power mode reported by the robot: `1` Eco, `2` Normal |
+| `status.navigationMode` | number | – | Navigation mode reported by the robot: `1` Normal, `2` Extra Care, `3` Deep |
+| `status.spotWidth` | number | – | Spot width reported by the robot in cm |
+| `status.spotHeight` | number | – | Spot height reported by the robot in cm |
+| `cleaningParameters.category` | number | ✓ | Cleaning type for the next start: `2` House, `3` Spot, `4` Map |
+| `cleaningParameters.mode` | number | ✓ | `1` Eco, `2` Normal |
+| `cleaningParameters.navigationMode` | number | ✓ | `1` Normal, `2` Extra Care, `3` Deep |
+| `cleaningParameters.spotWidth` | number | ✓ | Width of the spot area in cm |
+| `cleaningParameters.spotHeight` | number | ✓ | Height of the spot area in cm |
+| `cleaningParameters.mapId` | string | ✓ | Map for map cleaning (`category = 4`), see `maps.<mapId>.id` |
+| `cleaningParameters.boundaryId` | string | ✓ | Zone to clean for map cleaning (`category = 4`), see `maps.<mapId>.zone.<boundaryId>.id` |
+| `commands.start` | button | ✓ | Start cleaning with the current `cleaningParameters.*` |
 | `commands.pause` | button | ✓ | Pause cleaning |
 | `commands.resume` | button | ✓ | Resume a paused cleaning |
 | `commands.stop` | button | ✓ | Stop cleaning |
@@ -59,11 +63,15 @@ Every robot reported by the server is created as a device `vacuula.0.<robotId>`.
 
 ### Maps, blocking lines and zones
 
-For every connected robot the maps are loaded on each polling cycle into `vacuula.0.<robotId>.maps.<mapId>`. The folder name is the map's name. For every enabled map its boundaries are loaded as well (boundaries of disabled maps are not updated): blocking lines (`polyline`) go to `…maps.<mapId>.blockingline.<boundaryId>`, zones (`polygon`) go to `…maps.<mapId>.zone.<boundaryId>`, each channel named after the boundary. Maps and boundaries that the server no longer reports are removed.
+For every connected robot the maps are loaded on each polling cycle into `vacuula.0.<robotId>.maps.<mapId>`. The folder name is the map's name. For every enabled map its boundaries are loaded as well (boundaries of disabled maps are not updated): blocking lines (`polyline`) go to `…maps.<mapId>.blockingline.<boundaryId>`, zones (`polygon`) go to `…maps.<mapId>.zone.<boundaryId>`, each channel named after the boundary.
+
+In the object IDs of maps and boundaries, every character other than `a-z`, `A-Z`, `0-9`, `_` and `-` is replaced by `-`. For example, the map `2026-11-23T13:43:47Z` is stored as `maps.2026-11-23T13-43-47Z`. The original ID is available in the `id` state.
+
+Maps and boundaries that the server no longer reports are **not** deleted, so that history or other custom settings on their states are preserved. Delete such objects manually in the object view if you no longer need them.
 
 | State | Type | Writable | Description |
 |---|---|---|---|
-| `maps.<mapId>.id` | string | – | ID of the map (e.g. for `cleaning.mapId`) |
+| `maps.<mapId>.id` | string | – | ID of the map (e.g. for `cleaningParameters.mapId`) |
 | `maps.<mapId>.name` | string | – | Name of the map |
 | `maps.<mapId>.enabled` | boolean | – | Map is enabled |
 | `maps.<mapId>.<blockingline\|zone>.<boundaryId>.id` | string | – | ID of the boundary |
@@ -77,19 +85,19 @@ When you change `enabled` of a blocking line, the adapter reloads the boundaries
 
 Commands are triggered by setting the corresponding `commands.*` state to `true` (without ack). The adapter sends the command to the server, resets the button to `false` and immediately refreshes the robot's state. Commands the robot cannot execute in its current situation (e.g. `resume` while not paused) are rejected by the server and logged as an error.
 
-The `cleaning.*` states reflect the settings reported by the robot and serve as parameters for `commands.start`:
+The `cleaningParameters.*` states are the parameters for `commands.start`. They are set only by you, never by polling. The values the robot itself reports are shown read-only under `status.category`, `status.mode`, `status.navigationMode`, `status.spotWidth` and `status.spotHeight` and are updated on every refresh.
 
-1. Set the desired values, e.g. `cleaning.category = 3`, `cleaning.mode = 1`, `cleaning.spotWidth = 200`, `cleaning.spotHeight = 200` for a 2 × 2 m spot cleaning in eco mode.
+1. Set the desired values, e.g. `cleaningParameters.category = 3`, `cleaningParameters.mode = 1`, `cleaningParameters.spotWidth = 200`, `cleaningParameters.spotHeight = 200` for a 2 × 2 m spot cleaning in eco mode.
 2. Set `commands.start` to `true`.
 
-Values written by you (ack = false) are not overwritten by polling until the cleaning has been started; afterwards the values reported by the robot are shown again. The start command always sends `category`, `mode` and `navigationMode`; `spotWidth` and `spotHeight` are only sent for spot cleaning (`category = 3`). For map cleaning (`category = 4`), `mapId` and `boundaryId` are sent if they are not empty. Without `boundaryId` the whole map is cleaned. `boundaryId` requires `mapId`.
+Every value you write is checked immediately. A valid value is confirmed (ack = true) and kept for the next start; an invalid value (e.g. `cleaningParameters.mode = 7`) is rejected with a warning in the log and the previous value is restored. A parameter without a value is filled once with the value reported by the robot. The start command always sends `category`, `mode` and `navigationMode`; `spotWidth` and `spotHeight` are only sent for spot cleaning (`category = 3`). For map cleaning (`category = 4`), `mapId` and `boundaryId` are sent if they are not empty. Without `boundaryId` the whole map is cleaned. `boundaryId` requires `mapId`.
 
 Example (JavaScript adapter):
 
 ```js
 const robot = 'vacuula.0.OPS36118-f045da63f5f4';
-await setStateAsync(`${robot}.cleaning.category`, 2); // House
-await setStateAsync(`${robot}.cleaning.mode`, 2);     // Normal
+await setStateAsync(`${robot}.cleaningParameters.category`, 2); // House
+await setStateAsync(`${robot}.cleaningParameters.mode`, 2);     // Normal
 await setStateAsync(`${robot}.commands.start`, true);
 ```
 
@@ -104,7 +112,10 @@ Connection problems and failed commands are written to the ioBroker log. A persi
 -->
 ### **WORK IN PROGRESS**
 * (muffin142) maps with their blocking lines and zones are loaded; blocking lines can be enabled/disabled
-* (muffin142) map cleaning of a single zone via `cleaning.mapId` / `cleaning.boundaryId`
+* (muffin142) map cleaning of a single zone via `cleaningParameters.mapId` / `cleaningParameters.boundaryId`
+* (muffin142) polling interval is limited to 3600 s in the adapter code as well
+* (muffin142) `info.modelName` and `info.firmware` moved to `status.modelName` and `status.firmware`
+* (muffin142) `cleaning` renamed to `cleaningParameters`; its states are only set by the user, validated and acknowledged immediately; the values reported by the robot are mirrored read-only to `status`
 
 ### 0.0.2 (2026-11-05)
 * (muffin142) enabled automated releases
