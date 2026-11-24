@@ -31,6 +31,7 @@ Every robot reported by the server is created as a device `vacuula.0.<robotId>`.
 |---|---|---|---|
 | `name` | string | – | Name of the robot as configured on the server |
 | `connected` | boolean | – | Robot is connected to the Vacuula server |
+| `lastUpdate` | number | – | Time of the last successful update of the robot state (`info.*`, `status.*`, `cleaning.*`), ms since epoch |
 | `info.modelName` | string | – | Model, e.g. `BotVacD7Connected` |
 | `info.firmware` | string | – | Firmware version |
 | `status.state` | number | – | `1` Idle, `2` Cleaning, `3` Paused, `4` Docking |
@@ -62,6 +63,7 @@ For every connected robot the maps are loaded on each polling cycle into `vacuul
 
 | State | Type | Writable | Description |
 |---|---|---|---|
+| `maps.<mapId>.id` | string | – | ID of the map (e.g. for `cleaning.mapId`) |
 | `maps.<mapId>.name` | string | – | Name of the map |
 | `maps.<mapId>.enabled` | boolean | – | Map is enabled |
 | `maps.<mapId>.<blockingline\|zone>.<boundaryId>.id` | string | – | ID of the boundary |
@@ -103,13 +105,16 @@ Connection problems and failed commands are written to the ioBroker log. A persi
 ### **WORK IN PROGRESS**
 * (muffin142) maps with their blocking lines and zones are loaded; blocking lines can be enabled/disabled
 * (muffin142) map cleaning of a single zone via `cleaning.mapId` / `cleaning.boundaryId`
-* (muffin142) alerts reported in command responses are no longer logged as warning
 
 ### 0.0.2 (2026-11-05)
 * (muffin142) enabled automated releases
 
 ### 0.0.1 (2026-11-05)
 * (muffin142) initial release
+
+## Older changes
+
+[Older changelogs can be found there](CHANGELOG_OLD.md)
 
 ## License
 MIT License

@@ -404,6 +404,8 @@ class Vacuula extends utils.Adapter {
 			}
 			await this.setState(fullId, { val: value, ack: true });
 		}
+
+		await this.setState(`${objId}.lastUpdate`, { val: Date.now(), ack: true });
 	}
 
 	/**
@@ -431,6 +433,17 @@ class Vacuula extends utils.Adapter {
 		await this.extendObject(`${objId}.connected`, {
 			type: 'state',
 			common: { name: 'Connected', type: 'boolean', role: 'indicator.reachable', read: true, write: false },
+			native: {},
+		});
+		await this.extendObject(`${objId}.lastUpdate`, {
+			type: 'state',
+			common: {
+				name: 'Last update of robot state',
+				type: 'number',
+				role: 'value.time',
+				read: true,
+				write: false,
+			},
 			native: {},
 		});
 
@@ -507,6 +520,11 @@ class Vacuula extends utils.Adapter {
 				const name = map.name ? String(map.name) : map.id;
 
 				await this.ensureObject(mapPath, { type: 'folder', common: { name }, native: { mapId: map.id } });
+				await this.ensureObject(`${mapPath}.id`, {
+					type: 'state',
+					common: { name: 'ID', type: 'string', role: 'text', read: true, write: false },
+					native: {},
+				});
 				await this.ensureObject(`${mapPath}.name`, {
 					type: 'state',
 					common: { name: 'Name', type: 'string', role: 'text', read: true, write: false },
@@ -517,6 +535,7 @@ class Vacuula extends utils.Adapter {
 					common: { name: 'Enabled', type: 'boolean', role: 'indicator', read: true, write: false },
 					native: {},
 				});
+				await this.updateState(`${mapPath}.id`, map.id);
 				await this.updateState(`${mapPath}.name`, name);
 				await this.updateState(`${mapPath}.enabled`, !!map.enabled);
 
